@@ -41,25 +41,15 @@ async def func(filepath, size):
                     yield f
 
 async def video(filepath, size):
-    supported = ['.mp4','.mkv','.avi','.webm','.wmv','.mov']
     if not os_path.isfile(filepath):
         LOGGER.error('File not found : ' + filepath)
         raise Exception('File not found')
     
     file_path_name, file_ext = os_path.splitext(filepath)
-    if not file_ext in supported:
-        LOGGER.error('File not supported : ' + filepath)
-        raise Exception('File not supported')
-
     probe = await ffprobe.func(filepath)
-    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
-    audio_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'audio'), None)
-    duration = int(float(video_stream["duration"]))
-    vbyterate = int(video_stream['bit_rate']) / 8
-    abyterate = int(audio_stream['bit_rate']) / 8
-
-    size = size * 9 // 10
-    max_duration = size // (vbyterate + abyterate)
+    
+    duration = float(probe['format']["duration"])
+    size = size * 98 // 100
 
     splited_duration = 0
     i = 0
@@ -70,12 +60,12 @@ async def video(filepath, size):
         cmd = [
             "ffmpeg",
             "-hide_banner",
-            "-i",
-            filepath,
             '-ss',
             str(splited_duration),
-            '-t',
-            str(max_duration),
+            "-i",
+            filepath,
+            '-fs',
+            str(size),
             '-c',
             'copy',
             '-async',
@@ -95,7 +85,7 @@ async def video(filepath, size):
         if not stderr.decode():
             LOGGER.error(f'[stderr] {stderr.decode()}')
 
-        splited_duration += max_duration
+        splited_duration += float((await ffprobe.func(out_file))['format']["duration"])
         
         LOGGER.debug(out_file)
         yield out_file
